@@ -1,0 +1,71 @@
+{
+  "name": "dsh-quick-connect",
+  "displayName": "DSH Quick Connect",
+  "description": "Bring Amazon Quick (AWS) chat quota into DeepSeek Harness (DSH). Reuses the Quick desktop app's sign-in from Windows Credential Manager and refreshes tokens through the standard AWS SSO OIDC endpoint; no separate OAuth flow is started.",
+  "version": "0.2.1",
+  "author": "dsh-quick-connect contributors",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/weilifox/dsh-quick-connect.git"
+  },
+  "homepage": "https://github.com/weilifox/dsh-quick-connect#readme",
+  "bugs": {
+    "url": "https://github.com/weilifox/dsh-quick-connect/issues"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "deepseek",
+    "quick",
+    "aws",
+    "model-provider"
+  ],
+  "type": "module",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": "./lib/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "license": "MIT",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-settings-plugins",
+        "@deepseek-ai/dsh-client-locale"
+      ],
+      "platform": "web"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.5",
+    "@deepseek-ai/dsh-attachment": ">=0.2.1-rc.1 <0.2.2-0 || >=0.2.2-rc.1 <0.2.3-0 || >=0.2.3-rc.1 <0.2.4-0 || >=0.2.4-rc.1 <0.2.5-0 || >=0.2.5-rc.1 <0.2.6-0 || >=0.2.6-rc.1 <0.2.7-0 || >=0.2.7-rc.1 <0.2.8-0 || >=0.2.8-rc.1 <0.2.9-0 || >=0.2.9-rc.1 <0.3",
+    "@deepseek-ai/dsh-home-paths": ">=0.2.1-rc.1 <0.2.2-0 || >=0.2.2-rc.1 <0.2.3-0 || >=0.2.3-rc.1 <0.2.4-0 || >=0.2.4-rc.1 <0.2.5-0 || >=0.2.5-rc.1 <0.2.6-0 || >=0.2.7-rc.1 <0.2.8-0 || >=0.2.8-rc.1 <0.2.9-0 || >=0.2.9-rc.1 <0.3",
+    "@deepseek-ai/dsh-host-webserver": ">=0.2.1-rc.1 <0.2.2-0 || >=0.2.2-rc.1 <0.2.3-0 || >=0.2.3-rc.1 <0.2.4-0 || >=0.2.4-rc.1 <0.2.5-0 || >=0.2.5-rc.1 <0.2.6-0 || >=0.2.6-rc.1 <0.2.7-0 || >=0.2.7-rc.1 <0.2.8-0 || >=0.2.8-rc.1 <0.2.9-0 || >=0.2.9-rc.1 <0.3",
+    "@deepseek-ai/dsh-llm": ">=0.2.1-rc.1 <0.2.2-0 || >=0.2.2-rc.1 <0.2.3-0 || >=0.2.3-rc.1 <0.2.4-0 || >=0.2.4-rc.1 <0.2.5-0 || >=0.2.5-rc.1 <0.2.6-0 || >=0.2.6-rc.1 <0.2.7-0 || >=0.2.7-rc.1 <0.2.8-0 || >=0.2.8-rc.1 <0.2.9-0 || >=0.2.9-rc.1 <0.3",
+    "@deepseek-ai/dsh-llm-pi-ai": ">=0.2.1-rc.1 <0.2.2-0 || >=0.2.2-rc.1 <0.2.3-0 || >=0.2.3-rc.1 <0.2.4-0 || >=0.2.4-rc.1 <0.2.5-0 || >=0.2.5-rc.1 <0.2.6-0 || >=0.2.6-rc.1 <0.2.7-0 || >=0.2.7-rc.1 <0.2.8-0 || >=0.2.8-rc.1 <0.2.9-0 || >=0.2.9-rc.1 <0.3",
+    "@deepseek-ai/dsh-settings": ">=0.2.1-rc.1 <0.2.2-0 || >=0.2.2-rc.1 <0.2.3-0 || >=0.2.3-rc.1 <0.2.4-0 || >=0.2.4-rc.1 <0.2.5-0 || >=0.2.5-rc.1 <0.2.6-0 || >=0.2.6-rc.1 <0.2.7-0 || >=0.2.7-rc.1 <0.2.8-0 || >=0.2.8-rc.1 <0.2.9-0 || >=0.2.9-rc.1 <0.3",
+    "@deepseek-ai/schemastery": "^3.18.5",
+    "@earendil-works/pi-ai": "^1.3.0",
+    "react": "^18.2.0"
+  }
+}

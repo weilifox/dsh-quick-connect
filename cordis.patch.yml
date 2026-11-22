@@ -1,0 +1,6 @@
+# Register the Amazon Quick provider without changing the profile's current
+# default model. The plugin reuses the Quick desktop app's sign-in from
+# Windows Credential Manager; no separate OAuth flow is started.
+- insert:
+    - id: llm-quick
+      name: dsh-quick-connect
