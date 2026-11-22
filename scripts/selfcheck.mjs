@@ -101,6 +101,43 @@ const index = await imports("lib/index.js");
 }
 //#endregion
 
+//#region 5b. tool bridge (text protocol → toolCall events)
+{
+	const section = gateway.buildToolProtocolSection([
+		{
+			name: "ops_bash",
+			description: "Run a shell command",
+			parameters: {
+				type: "object",
+				properties: { command: { type: "string", description: "shell command" }, cwd: { type: "string" } },
+				required: ["command"]
+			}
+		}
+	]);
+	check("bridge: protocol lists the tool", section.includes("ops_bash") && section.includes("command: string"));
+	check("bridge: optional param marked", section.includes("cwd?"));
+	check("bridge: external-executor wording", section.includes("外部执行器") && section.includes('{"tool"'));
+
+	const plain = gateway.extractToolCalls('{"tool":"ops_bash","arguments":{"command":"ls"}}');
+	check("bridge: bare JSON request parsed", plain.calls.length === 1 && plain.calls[0].name === "ops_bash" && plain.calls[0].arguments.command === "ls");
+	check("bridge: bare JSON leaves no text", plain.text === "");
+
+	const fenced = gateway.extractToolCalls('```json\n{"tool":"ops_bash","arguments":{"command":"ls"}}\n```');
+	check("bridge: fenced JSON parsed", fenced.calls.length === 1);
+
+	const tagged = gateway.extractToolCalls('先看看\n<tool_call>{"name":"ops_bash","arguments":{"command":"ls"}}</tool_call>');
+	check("bridge: <tool_call> still parsed", tagged.calls.length === 1 && tagged.text === "先看看");
+
+	const prose = gateway.extractToolCalls(
+		'示例格式是 {"tool":"ops_bash","arguments":{"command":"ls"}}，但这次我只是在解释，' + "后面还有一大段说明文字用来超过一百二十个字符的阈值，所以不能被当成一次工具调用。"
+	);
+	check("bridge: prose with JSON is not a call", prose.calls.length === 0);
+
+	const answer = gateway.extractToolCalls("name 是 dsh-quick-connect，version 是 0.3.0。");
+	check("bridge: plain answer untouched", answer.calls.length === 0 && answer.text.includes("0.3.0"));
+}
+//#endregion
+
 //#region 6. catalog + status shape
 {
 	const rows = index.buildCatalogRows();
@@ -118,6 +155,17 @@ const index = await imports("lib/index.js");
 	check("usage: exports invokeAgentPath/fetchUsage/describeSubscription", typeof usage.invokeAgentPath === "function" && typeof usage.fetchUsage === "function" && typeof usage.describeSubscription === "function");
 	const described = usage.describeSubscription({ subscription: { subscription_type: "QUICK_LITE", free_trial_metadata: { status: "ACTIVE", expiry_date: 1797863699 } } });
 	check("usage: subscription description formats trial", described?.includes("QUICK_LITE") === true, described);
+}
+//#endregion
+
+//#region 8. tool name aliasing
+{
+	const tools = [{ name: "ops_bash" }, { name: "fs_read" }];
+	check("alias: exact name kept", gateway.resolveToolName("ops_bash", tools) === "ops_bash");
+	check("alias: bash → ops_bash", gateway.resolveToolName("bash", tools) === "ops_bash");
+	check("alias: shell → ops_bash", gateway.resolveToolName("shell", tools) === "ops_bash");
+	check("alias: read_file → fs_read", gateway.resolveToolName("read_file", tools) === "fs_read");
+	check("alias: unknown passes through", gateway.resolveToolName("nonsense", tools) === "nonsense");
 }
 //#endregion
 

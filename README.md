@@ -2,7 +2,7 @@
 
 把 **Amazon Quick**（AWS 的 AI 助手桌面客户端）的聊天时长接进 DeepSeek Harness（DSH）——在 DSH 里选 Quick 的档位模型聊天，消耗 Quick 账号的免费/订阅时长，而不是 token。
 
-- 版本：0.2.1
+- 版本：0.3.0
 - 仓库：https://github.com/weilifox/dsh-quick-connect
 - 前置：本机装过 Amazon Quick 桌面端（默认在 `%LOCALAPPDATA%\Programs\quickwork`）并登录过一次；凭据留在 Windows 凭据管理器里，本插件**只读**
 
@@ -32,6 +32,32 @@ Quick 的云端 agent 除了 Amazon 侧工具，还能调用**本机工具**—�
 **文件访问白名单**：Quick 的 outpost 只允许访问登记过的目录（`/local/allowed_folders`）。插件启动后按设置项 `allowedFolders`（换行或 `;` 分隔）逐个登记；留空则默认登记 DSH 宿主的工作目录。未登记的路径会返回 `Access denied. Path is not in allowed folders: []`。
 
 **安全边界**：本机工具由 Quick 自己的 outpost 执行、走它自己的策略（`human_pps_grant` 审批来源），插件不额外放大权限；关掉开关（设置项 `localTools = false`）即完全不拉 outpost，行为回到 0.1.1 的纯聊天。
+
+## 让 Quick 调用 DSH 的工具（v0.3.0 新增）
+
+Quick 的双向流只收**聊天文本**，DSH 的工具定义发不过去——没有工具，模型每次回一句就结束一轮，看起来就是「每一步都停下来问一句」。v0.3.0 用一个**文本协议**把这个环补上：
+
+1. 发消息前，插件把 DSH 当前可用的工具清单压成紧凑列表（最多 28 条，名称 + 一句描述 + 参数名/类型），连同协议说明放在 prompt 开头；
+2. 模型需要动手时回一行 JSON 执行请求：
+
+   ```json
+   {"tool":"ops_bash","arguments":{"command":"ls"}}
+   ```
+
+3. 插件把它解析成 pi-ai 的 `toolCall` 块、`stopReason` 置为 `toolUse`，DSH 照常执行工具（走 DSH 自己的审批与沙箱）；
+4. 工具结果作为下一条消息以 `[工具 name 的结果]` 回到 Quick，模型据此继续——这就是正常的 agent 循环。
+
+**协议为什么长这样**：一开始用的是 `<tool_call>{…}</tool_call>` 标签，实测被 Quick 内核一律拒绝（模型坚持「我没有这个工具」），三种措辞 × 两档都一样。换成「你有一个外部执行器 DSH + 一行 JSON 执行请求」后 3/3 通过，包括 `smart` 档；所以协议是 JSON 请求，不是伪造标签。
+
+**工具清单从哪来**：pi-ai 在把请求交给 provider 之前会走 `normalizeContext()`，把 `context.tools` 折进一条 `role: "system"` 的首条消息（字段 `toolsAdded` / `toolsRemoved`），provider 收到的是纯 messages。所以插件按 pi-ai 自己的 `getCurrentTools()` 语义回读这段 transcript 才能拿到工具（只读 `context.tools` 会一直是空的，实测就卡在这里）。
+
+**工具名容错**：Quick 偶尔会把工具名写成大白话（`bash`、`shell`、`read_file`），DSH 会直接回 `unknown tool`。插件现在先按声明名精确匹配，再按后缀/同义词表兜底（`bash`/`shell`/`exec` → 声明的 `*_bash`，`read_file` → `*_read`…），名字实在对不上才原样交给 DSH。清单上限也从 28 提到 64 条（DSH 一套工具通常 90+ 个，只列 28 条会让 `ops_bash` 这种后排工具根本不出现）。
+
+**解析规则**：整段回复是一个 JSON 请求（或包在 ```json 围栏里）才视为调用；模型在解释里引用的 JSON 片段不会被误当成调用（JSON 后面还有超过 120 字符的正文即判为例句）。`<tool_call>` 标签作为兼容写法仍然接受。
+
+**两条通道互斥（实测）**：只要本轮带了 DSH 的工具清单，插件就**不再声明本轮来自本机设备**。原因很直接——一旦云端把这轮认作「设备轮次」，它会优先用自带的本机工具（`run_python_outpost_local`、`file_read` …）干活，根本不看 JSON 协议；实测「列出最新 5 个文件夹」就是被 outpost python 拦走的，`ops_bash` 一次没调。所以桥接开启时设备工具让位，桥接关闭时才轮到它。
+
+**关闭方式**：设置项 `toolBridge = false`（或 DSH 侧本轮不提供工具），插件就不发协议段，退化成纯聊天——此时本轮重新按设备轮次发出，Quick 用它自己的本机工具干活（见上一节），只是 DSH 的工具循环不参与。
 
 ## 用量显示
 
@@ -89,6 +115,7 @@ cd dsh-quick-connect && node scripts/selfcheck.mjs    # 离线自检
 node scripts/verify-live.mjs                          # 真网链路（会真发一条 pong）
 node scripts/verify-live.mjs --mode=balanced          # 指定档位实测路由模型
 node scripts/verify-localtools.mjs                    # 本机工具（拉 outpost + 两轮真调用）
+node scripts/verify-toolbridge.mjs   # + verify-toolbridge-shape.mjs（transcript 形态）                    # 工具桥（两轮：模型要工具 → 喂回结果 → 出答案）
 QUICK_DEBUG_EVENTS=1 node scripts/verify-localtools.mjs   # 打协议帧，排障用
 ```
 
@@ -111,4 +138,5 @@ QUICK_DEBUG_EVENTS=1 node scripts/verify-localtools.mjs   # 打协议帧，排�
 | 能聊但答案怪 | 检查 `turn_usage.resolved_model_id` 是否符合预期档位 |
 | 答到一半突然断流 | 客户端每 25s 要发 `ping` 保活（已实现）；本机工具耗时过长时服务端会先关流，重试即可 |
 | 设备工具报 `Path is not in allowed folders` | 目标路径不在 `allowedFolders` → 设置里加一行该目录 |
+| 模型说「我没有 ops_bash 这个工具」 | 走的是 v0.2.x 的纯聊天通路 → 升级到 0.3.0 并确认 `toolBridge` 为开 |
 | `本机工具通道未启用` | 设置项 `localTools` 被关，或 outpost 起不来 → 看状态卡 `localTools.error` / 手动 `outpost-restart` |
