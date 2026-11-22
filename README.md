@@ -6,6 +6,8 @@
 - 仓库：https://github.com/weilifox/dsh-quick-connect
 - 前置：本机装过 Amazon Quick 桌面端（默认在 `%LOCALAPPDATA%\Programs\quickwork`）并登录过一次；凭据留在 Windows 凭据管理器里，本插件**只读**
 
+![DSH 模型选择器里的 Amazon Quick 分组](assets/screenshot-1.png)
+
 ## 档位（= 三/四档消耗规则）
 
 | 模型 id | Quick `agent_mode` | 定位 | 实测路由 |
