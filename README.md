@@ -40,6 +40,14 @@ Quick 的云端 agent 除了 Amazon 侧工具，还能调用**本机工具**—�
 - **请求被当成正文发出来**。Quick 写 PowerShell 命令时把引号直接塞进字符串（`"command":"… -Command "Get-ChildItem 'D:\x'"`），`JSON.parse` 一律拒收，请求就漏成了聊天文字。0.3.1 加了一个容错扫描器：读字符串时只要后面不是 `,`/`}` 就当它是命令里的引号而不是结束符，Windows 反斜杠原样保留；也支持「先一句话、再一行请求」。
 - **工具清单被截断**。DSH 真机 94 个工具，旧版按 64 条 + 字节不可控的中文描述拼，正好把 `ops_bash` 这种后排工具挤掉，模型只好猜名字（猜成 `pwsh`）。0.3.1 改成按**字节**算预算（≤11 KB）、描述分三档降级（完整 → 26 字 → 只留名字），并给 `pwsh`/`powershell`/`cmd`/`sh` 加了别名。
 
+同一版还修了本机工具通道的三处（回归测试时定位到）：
+
+- **设备调用参数多包了一层**。新版云端发的 `tool_call` 里，真实工具名与参数在 `payload.arguments.params` 下面（`{params:{name,arguments}, _quickwork:{…}}`），旧版把整个壳交给 outpost，等于空参执行，回一个 traceback。
+- **`permission_request` 没人应答**。写类设备工具要先授权，桌面端点「允许」时回 `tool_approval {connectorId, actionId, scope}`；插件以前不回，云端等不到就关流，表现为回复说到一半断掉。现在按 `ALLOW_ALWAYS` 自动应答。
+- **失败被当成成功**。outpost 的 `/local/invoke_tool` 对执行失败仍回 HTTP 200，错误体只有 `error` 字段（既没有 `success:false` 也没有 `status:"error"`），旧版因此把 traceback 当结果回给云端。判定已补上这一条。
+
+**已知问题**：本机工具这一路偶发「tool_result 之后云端关流」（回复被截断，重试后通常能走通）。DSH↔Quick 的**工具桥**不受影响，是这个版本的主通路。
+
 ## 让 Quick 调用 DSH 的工具（v0.3.0 新增）
 
 Quick 的双向流只收**聊天文本**，DSH 的工具定义发不过去——没有工具，模型每次回一句就结束一轮，看起来就是「每一步都停下来问一句」。v0.3.0 用一个**文本协议**把这个环补上：
