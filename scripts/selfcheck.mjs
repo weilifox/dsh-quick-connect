@@ -199,6 +199,34 @@ const index = await imports("lib/index.js");
 }
 //#endregion
 
+//#region 11. decision cards
+{
+	const card = '<decision question="要覆盖已有文件吗？" multi="false"><option description="保留原文件">跳过</option><option>覆盖</option></decision>';
+	const parsed = gateway.extractDecisions(card);
+	check("decision: card parsed", parsed.questions.length === 1);
+	check("decision: question text kept", parsed.questions[0]?.question === "要覆盖已有文件吗？");
+	check("decision: options parsed", parsed.questions[0]?.options?.length === 2);
+	check("decision: option description kept", parsed.questions[0]?.options?.[0]?.description === "保留原文件");
+	check("decision: markup stripped from reply", parsed.text === "");
+
+	const mixed = gateway.extractDecisions('先确认一下。\n' + card + '\n我等你选。');
+	check("decision: surrounding prose kept", mixed.text === "先确认一下。\n\n我等你选。");
+
+	const args = gateway.decisionQuestionsToToolArgs(parsed.questions);
+	check("decision: ask_user_question args shaped", Array.isArray(args.questions) && args.questions[0]?.options?.length === 2);
+
+	const list = gateway.renderDecisionList(parsed.questions);
+	check("decision: text fallback lists options", list.includes("1) 跳过") && list.includes("2) 覆盖"));
+
+	const broken = gateway.extractDecisions('<decision question="没有选项吗？"></decision>');
+	check("decision: single-option card stays as text", broken.questions.length === 0 && broken.text.includes("<decision"));
+
+	const two = gateway.extractDecisions('<decisions><decision question="A？"><option>是</option><option>否</option></decision><decision question="B？" multi="true"><option>x</option><option>y</option></decision></decisions>');
+	check("decision: grouped cards parsed", two.questions.length === 2 && two.questions[1]?.multi === true);
+	check("decision: group wrapper stripped", !two.text.includes("<decisions>"));
+}
+//#endregion
+
 console.log("");
 if (failures === 0) {
 	console.log("selfcheck: ALL PASSED");
