@@ -158,7 +158,23 @@ const index = await imports("lib/index.js");
 }
 //#endregion
 
-//#region 8. tool name aliasing
+//#region 8. loose JSON requests (Quick writes prose-y JSON)
+{
+	// Real 0.3.0 failure: the model put unescaped quotes and raw Windows
+	// backslashes inside "command", JSON.parse choked, the request leaked
+	// into the reply as literal text.
+	const raw = '{"tool":"ops_bash","arguments":{"command":"powershell -NoProfile -Command "Get-ChildItem \'D:\\DSH-WorkSpace\\REA\' -Force | Where-Object { $_.Name -match \'Rill\' }","description":"查看进程"}}';
+	const parsed = gateway.extractToolCalls(raw);
+	check("loose: unescaped inner quotes still parse", parsed.calls.length === 1 && parsed.calls[0].name === "ops_bash");
+	check("loose: backslashes survive", String(parsed.calls[0]?.arguments?.command ?? "").includes("D:\\DSH-WorkSpace\\REA"));
+	check("loose: request text does not leak into the reply", parsed.text === "");
+	const inline = gateway.extractToolCalls('先看目录。\n{"tool":"ops_bash","arguments":{"command":"ls -la"}}');
+	check("loose: narration before the request is kept", inline.calls.length === 1 && inline.text === "先看目录。");
+	check("loose: plain chat stays plain", gateway.extractToolCalls("只是聊天").calls.length === 0);
+}
+//#endregion
+
+//#region 9. tool name aliasing
 {
 	const tools = [{ name: "ops_bash" }, { name: "fs_read" }];
 	check("alias: exact name kept", gateway.resolveToolName("ops_bash", tools) === "ops_bash");
@@ -166,6 +182,20 @@ const index = await imports("lib/index.js");
 	check("alias: shell → ops_bash", gateway.resolveToolName("shell", tools) === "ops_bash");
 	check("alias: read_file → fs_read", gateway.resolveToolName("read_file", tools) === "fs_read");
 	check("alias: unknown passes through", gateway.resolveToolName("nonsense", tools) === "nonsense");
+	check("alias: pwsh → ops_bash", gateway.resolveToolName("pwsh", tools) === "ops_bash");
+	check("alias: powershell → ops_bash", gateway.resolveToolName("powershell", tools) === "ops_bash");
+}
+//#region 10. tool catalogue at DSH scale (94 tools)
+{
+	const mk = (i) => ({
+		name: i === 40 ? "ops_bash" : `tool_${String(i).padStart(3, "0")}`,
+		description: "演示工具目录在 94 个工具时是否完整列出，不被字节预算截断或改名。",
+		parameters: { type: "object", properties: { command: { type: "string" }, path: { type: "string" }, timeout: { type: "number" } }, required: ["command"] },
+	});
+	const section = gateway.buildToolProtocolSection(Array.from({ length: 94 }, (_, i) => mk(i)));
+	check("catalog: fits the head byte budget", Buffer.byteLength(section, "utf8") <= 11_000, `${Buffer.byteLength(section, "utf8")} bytes`);
+	check("catalog: last tool still listed", section.includes("- tool_093"));
+	check("catalog: ops_bash survives the cap", section.includes("- ops_bash"));
 }
 //#endregion
 

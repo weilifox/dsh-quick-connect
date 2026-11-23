@@ -2,7 +2,7 @@
 
 把 **Amazon Quick**（AWS 的 AI 助手桌面客户端）的聊天时长接进 DeepSeek Harness（DSH）——在 DSH 里选 Quick 的档位模型聊天，消耗 Quick 账号的免费/订阅时长，而不是 token。
 
-- 版本：0.3.0
+- 版本：0.3.1
 - 仓库：https://github.com/weilifox/dsh-quick-connect
 - 前置：本机装过 Amazon Quick 桌面端（默认在 `%LOCALAPPDATA%\Programs\quickwork`）并登录过一次；凭据留在 Windows 凭据管理器里，本插件**只读**
 
@@ -32,6 +32,13 @@ Quick 的云端 agent 除了 Amazon 侧工具，还能调用**本机工具**—�
 **文件访问白名单**：Quick 的 outpost 只允许访问登记过的目录（`/local/allowed_folders`）。插件启动后按设置项 `allowedFolders`（换行或 `;` 分隔）逐个登记；留空则默认登记 DSH 宿主的工作目录。未登记的路径会返回 `Access denied. Path is not in allowed folders: []`。
 
 **安全边界**：本机工具由 Quick 自己的 outpost 执行、走它自己的策略（`human_pps_grant` 审批来源），插件不额外放大权限；关掉开关（设置项 `localTools = false`）即完全不拉 outpost，行为回到 0.1.1 的纯聊天。
+
+## 0.3.1 修的是什么
+
+0.3.0 在真机上露了两个尾巴，都不是协议设计的问题，是模型写出来的字面量不合 JSON：
+
+- **请求被当成正文发出来**。Quick 写 PowerShell 命令时把引号直接塞进字符串（`"command":"… -Command "Get-ChildItem 'D:\x'"`），`JSON.parse` 一律拒收，请求就漏成了聊天文字。0.3.1 加了一个容错扫描器：读字符串时只要后面不是 `,`/`}` 就当它是命令里的引号而不是结束符，Windows 反斜杠原样保留；也支持「先一句话、再一行请求」。
+- **工具清单被截断**。DSH 真机 94 个工具，旧版按 64 条 + 字节不可控的中文描述拼，正好把 `ops_bash` 这种后排工具挤掉，模型只好猜名字（猜成 `pwsh`）。0.3.1 改成按**字节**算预算（≤11 KB）、描述分三档降级（完整 → 26 字 → 只留名字），并给 `pwsh`/`powershell`/`cmd`/`sh` 加了别名。
 
 ## 让 Quick 调用 DSH 的工具（v0.3.0 新增）
 
@@ -139,4 +146,6 @@ QUICK_DEBUG_EVENTS=1 node scripts/verify-localtools.mjs   # 打协议帧，排�
 | 答到一半突然断流 | 客户端每 25s 要发 `ping` 保活（已实现）；本机工具耗时过长时服务端会先关流，重试即可 |
 | 设备工具报 `Path is not in allowed folders` | 目标路径不在 `allowedFolders` → 设置里加一行该目录 |
 | 模型说「我没有 ops_bash 这个工具」 | 走的是 v0.2.x 的纯聊天通路 → 升级到 0.3.0 并确认 `toolBridge` 为开 |
+| 回复里直接出现 `{"tool":"…","arguments":{…}}` 原文 | 0.3.1 起容忍这种写法：命令里的引号没转义、Windows 反斜杠原样写都能读出来；若仍出现，说明请求后面还跟着大段说明（>120 字符），把它单独发一行 |
+| 模型抱怨「工具列表被截断，看不到完整名称」 | 0.3.1 把清单预算按字节算（≤11 KB）并优先保留全部名字，94 个工具也能列全；仍嫌长就把不需要的插件关掉 |
 | `本机工具通道未启用` | 设置项 `localTools` 被关，或 outpost 起不来 → 看状态卡 `localTools.error` / 手动 `outpost-restart` |

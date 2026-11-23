@@ -2,7 +2,7 @@
   "name": "dsh-quick-connect",
   "displayName": "DSH Quick Connect",
   "description": "Bring Amazon Quick (AWS) chat quota into DeepSeek Harness (DSH). Reuses the Quick desktop app's sign-in from Windows Credential Manager and refreshes tokens through the standard AWS SSO OIDC endpoint; no separate OAuth flow is started.",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "author": "dsh-quick-connect contributors",
   "repository": {
     "type": "git",
