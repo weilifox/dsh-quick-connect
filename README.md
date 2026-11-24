@@ -2,7 +2,7 @@
 
 把 **Amazon Quick**（AWS 的 AI 助手桌面客户端）的聊天时长接进 DeepSeek Harness（DSH）——在 DSH 里选 Quick 的档位模型聊天，消耗 Quick 账号的免费/订阅时长，而不是 token。
 
-- 版本：0.3.2
+- 版本：0.3.3
 - 仓库：https://github.com/weilifox/dsh-quick-connect
 - 前置：本机装过 Amazon Quick 桌面端（默认在 `%LOCALAPPDATA%\Programs\quickwork`）并登录过一次；凭据留在 Windows 凭据管理器里，本插件**只读**
 
@@ -32,6 +32,21 @@ Quick 的云端 agent 除了 Amazon 侧工具，还能调用**本机工具**—�
 **文件访问白名单**：Quick 的 outpost 只允许访问登记过的目录（`/local/allowed_folders`）。插件启动后按设置项 `allowedFolders`（换行或 `;` 分隔）逐个登记；留空则默认登记 DSH 宿主的工作目录。未登记的路径会返回 `Access denied. Path is not in allowed folders: []`。
 
 **安全边界**：本机工具由 Quick 自己的 outpost 执行、走它自己的策略（`human_pps_grant` 审批来源），插件不额外放大权限；关掉开关（设置项 `localTools = false`）即完全不拉 outpost，行为回到 0.1.1 的纯聊天。
+
+## 0.3.3：崩溃修复（重要，强烈建议升级）
+
+0.3.3 只修一件事：**代理隧道在 TLS 握手阶段被重置时，整个 DSH 宿主会直接退出**（现象是「应用无法启动」，没有任何插件报错）。
+
+原因：`lib/creds.js` 的 `performTlsRequest()` 把 `tls.on("error")` 注册在握手成功回调内部。握手阶段被重置时抛出的 `ECONNRESET` 没有监听器接管，在 Node 里就是未捕获异常，直接把宿主子进程带走。
+
+修法（两处）：
+
+- `lib/creds.js`：`socket.on("error")` 与 `tls.on("error")` 全部提前到**握手之前**注册；加 `settled` 标记做单次结算，避免重复 resolve/reject；超时改走同一个 `finish()`，同时销毁 socket。
+- `lib/gateway.js`：`CONNECT` 隧道 socket 交接给 `dialTls` 之后补 `rawSocket.on("error")`，同类隐患一并堵住。
+
+现在的行为：代理抖动时**只会让这一轮请求失败**（报 `ECONNRESET` / `tls_closed` / `tls_timeout`），不会再拖垮 DSH。代理恢复后无需重启宿主，重发即可。
+
+> 不需要重新登录。access token 过期由插件自己走 OIDC refresh 自动续（refresh_token 有效期到 2027-02）；tenant 域名不在公共 DNS 里，必须走代理（默认读本机 `127.0.0.1:7897`，可在设置里改）。
 
 ## 0.3.2：把 Quick 的选项题变成真选项（新增）
 
@@ -180,4 +195,5 @@ QUICK_DEBUG_EVENTS=1 node scripts/verify-localtools.mjs   # 打协议帧，排�
 | 模型抱怨「工具列表被截断，看不到完整名称」 | 0.3.1 把清单预算按字节算（≤11 KB）并优先保留全部名字，94 个工具也能列全；仍嫌长就把不需要的插件关掉 |
 | 回复里出现 `<decision …><option>…` 标签原文 | 0.3.2 会解析成 `ask_user_question`；仍露出说明卡片不合格（选项 <2 或标签没闭合），看网关日志的那一段回复 |
 | 点完选项后模型又重复问同一件事 | 选项结果作为工具结果回到下一轮，若重复说明对话历史被截断（`40 KB` 上限），把旧消息清一清或缩短 |
+| DSH 一启动就退出 / 弹「应用无法启动」 | 0.3.3 前的老 bug：TLS 握手阶段被重置的未捕获异常会杀掉宿主 → 升级 0.3.3；升级前先把代理恢复稳定再启动 |
 | `本机工具通道未启用` | 设置项 `localTools` 被关，或 outpost 起不来 → 看状态卡 `localTools.error` / 手动 `outpost-restart` |
